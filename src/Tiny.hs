@@ -10,7 +10,6 @@ module Tiny (
   , initialize
   , printOut
   , run
-  , showInput
   , showOutput
 ) where
 
@@ -20,22 +19,17 @@ import Control.Monad.Trans.State
 import Data.Array
 import Data.Bits
 import Data.Bool
+import Data.Char
 import Data.Int
 import Data.List
 import Numeric (showHex)
-
-class Category obj mor | mor -> obj where
-    dom :: mor -> obj
-    cod :: mor -> obj
-    idy :: obj -> mor
-    cmp :: mor -> mor -> Maybe mor
 
 -- TinyWord is the basic data type of the TINY computer
 -- A 4-bit word (one hex character) backed by an integer since Haskell provides no native 4-bit type
 newtype TinyWord = TW Integer deriving (Eq)
 
 instance Show TinyWord where
-    show (TW a) = showHex a ""
+    show (TW a) = map toUpper $ showHex a ""
 
 -- Mask off the lowest 4-bit part of the Integer
 mkTinyWord :: Integer -> TinyWord
@@ -192,9 +186,6 @@ computerDefault = Computer { _registers = registersDefault
                            , _output = []
                            }
 
-showInput :: Computer -> String
-showInput = concatMap show . _input
-
 showOutput :: Computer -> String
 showOutput = concatMap show . reverse . _output
 
@@ -245,31 +236,6 @@ mkInstruction (TW opcode) operand = case opcode of
     0xD -> DEL
     0xE -> LDL operand
     0xF -> FLA
-
--- Read an instruction (including address if necessary) from memory
--- Also note the updated IP
-readInstruction :: TinyWord -> Memory -> (Instruction, TinyWord)
-readInstruction ip ram = let
-    TW opcode = view (valueAt ip) ram
-    nextIP = incTW ip
-    addr = view (valueAt nextIP) ram   
-    in case opcode of
-        0x0 -> (HLT, nextIP)
-        0x1 -> (JMP addr, incTW nextIP)
-        0x2 -> (JZE addr, incTW nextIP)
-        0x3 -> (JNZ addr, incTW nextIP)
-        0x4 -> (LDA addr, incTW nextIP)
-        0x5 -> (STA addr, incTW nextIP)
-        0x6 -> (GET, nextIP)
-        0x7 -> (PUT, nextIP)
-        0x8 -> (ROL, nextIP)
-        0x9 -> (ROR, nextIP)
-        0xA -> (ADC addr, incTW nextIP)
-        0xB -> (CCF, nextIP)
-        0xC -> (SCF, nextIP)
-        0xD -> (DEL, nextIP)
-        0xE -> (LDL addr, incTW nextIP)
-        0xF -> (FLA, nextIP)
 
 -- Now we start to get to the meat of the emulation
 -- First, some utilities to make lenses and states work nicely together
@@ -460,4 +426,6 @@ run = execState $ tick `whileNot` halted
 
 -- Print all the output from a given program
 printOut :: Computer -> IO ()
-printOut = mapM_ print . evalState trace
+printOut = let
+    printStep (idx, c) = putStrLn $ show idx ++ ": " ++ show c
+    in mapM_ printStep . (zip [1..]) . evalState trace
